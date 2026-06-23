@@ -55,7 +55,7 @@
     </div>
 
     <div class="size-box">
-        <div class="size-title">📋 單片尺寸</div>
+        <div class="size-title">📋 單片尺寸與數量</div>
         <div class="form-group">
             <label for="lengthInput">請輸入自訂【長度】(cm)：</label>
             <input type="number" id="lengthInput" placeholder="請輸入長度" oninput="calculate()">
@@ -64,16 +64,21 @@
             <label for="widthInput">請輸入自訂【寬度】(cm)：</label>
             <input type="number" id="widthInput" value="100" placeholder="預設 100" oninput="calculate()">
         </div>
+        <div class="form-group">
+            <label for="quantityInput">請輸入需求【數量】(片)：</label>
+            <input type="number" id="quantityInput" value="1" min="1" placeholder="預設 1" oninput="calculate()">
+        </div>
     </div>
 
     <div id="resultBox" class="result-box">
         <div class="result-title">📊 試算結果</div>
         <hr style="border: 0; border-top: 1px solid #ffe899; margin-bottom: 10px;">
-        <div class="result-item">📐 裁切尺寸：<span id="resSize"></span></div>
-        <div class="result-item">💰 試算售價：<span id="resPrice" class="highlight">0</span> 元</div>
+        <div class="result-item">📐 單片尺寸：<span id="resSize"></span></div>
+        <div class="result-item">📦 需求數量：<span id="resQty" style="font-weight: bold;">1</span> 片</div>
+        <div class="result-item">💰 總計售價：<span id="resPrice" class="highlight">0</span> 元</div>
         <hr style="border: 0; border-top: 1px dashed #ffe899; margin: 15px 0;">
-        <div class="result-item">♻️ 產生廢料尺寸：<span id="resWasteSize"></span></div>
-        <div class="result-item">💵 廢料等值金額：<span id="resWastePrice" class="waste-highlight">0</span> 元</div>
+        <div class="result-item">♻️ 累積廢料尺寸：<span id="resWasteSize"></span></div>
+        <div class="result-item">💵 累積廢料價值：<span id="resWastePrice" class="waste-highlight">0</span> 元</div>
     </div>
 </div>
 
@@ -86,18 +91,16 @@
     }
 
     let db = [];
-    let currentProductBaseWidth = 100; // 預設整卷寬度基準為 100
+    let currentProductBaseWidth = 100;
     const jsonUrl = "data.json";
 
-    // 讀取最新的 data.json 資料庫
     fetch(jsonUrl)
         .then(res => res.json())
         .then(data => { db = data; console.log("資料庫同步成功！"); })
         .catch(err => console.log("讀取資料庫失敗:", err));
 
-    // 自動從品名偵測寬度規格 (支援 120cm, 91cm 等)
     function detectWidthFromProductName(name) {
-        let matchedWidth = 100; // 找不到預設就是 100
+        let matchedWidth = 100;
         const match = name.match(/寬(\d+)cm/);
         if (match && match[1]) {
             matchedWidth = parseInt(match[1]);
@@ -105,7 +108,6 @@
         return matchedWidth;
     }
 
-    // 🔍 雙向關鍵字模糊搜尋
     function searchProduct(type) {
         const keyword = document.getElementById(type === 'code' ? "codeInput" : "nameInput").value.trim().toLowerCase();
         const resultsDiv = document.getElementById(type === 'code' ? "codeSearchResults" : "nameSearchResults");
@@ -135,10 +137,8 @@
                     document.getElementById("nameInput").value = item.name;
                     document.getElementById("basePriceInput").value = item.price;
                     
-                    // ✨ 核心升級：自動偵測該品項的原始寬度
                     currentProductBaseWidth = detectWidthFromProductName(item.name);
                     
-                    // ✨ 同步修改預設寬度輸入框的值，並更新提示字
                     document.getElementById("widthInput").value = currentProductBaseWidth;
                     document.getElementById("baseSpecsHint").innerText = `※ 基準規格：寬 ${currentProductBaseWidth} cm × 長 30 cm`;
                     
@@ -165,6 +165,7 @@
         const basePrice = parseFloat(document.getElementById("basePriceInput").value);
         const length = parseFloat(document.getElementById("lengthInput").value);
         let width = parseFloat(document.getElementById("widthInput").value);
+        let qty = parseInt(document.getElementById("quantityInput").value);
         const resultBox = document.getElementById("resultBox");
 
         if (!basePrice || !length || length <= 0) {
@@ -172,40 +173,45 @@
             return;
         }
 
-        // 如果手動改掉售價或寬度，且當前沒有選定產品，則使用欄位當前值
         if (isNaN(width) || width <= 0) width = currentProductBaseWidth;
+        if (isNaN(qty) || qty <= 0) qty = 1;
 
-        const baseWidth = currentProductBaseWidth; // 使用自動偵測到的基準寬度 (100, 120 或 91)
-        const baseLength = 30; // 固定 1 尺 = 30cm
+        const baseWidth = currentProductBaseWidth;
+        const baseLength = 30;
 
-        // 寬度限制警告
         if (width > baseWidth) {
             alert(`⚠️ 輸入寬度 (${width}cm) 不能大於該產品原始整卷寬度 (${baseWidth}cm)！`);
             document.getElementById("widthInput").value = baseWidth;
             width = baseWidth;
         }
 
-        // 比例計算
+        // 比例計算 (單片)
         const lengthRatio = length / baseLength;
         const widthRatio = width / baseWidth;
-        const finalPrice = Math.round(basePrice * lengthRatio * widthRatio);
+        
+        // 總售價 = 單片售價 * 數量
+        const singlePrice = basePrice * lengthRatio * widthRatio;
+        const totalPrice = Math.round(singlePrice * qty);
 
         // 廢料計算
         const wasteWidth = baseWidth - width;
         let wasteText = "無廢料 (寬度剛好用完)";
-        let wastePriceText = "0";
+        let totalWastePrice = 0;
 
         if (wasteWidth > 0) {
             const wasteWidthRatio = wasteWidth / baseWidth;
-            const wastePrice = Math.round(basePrice * lengthRatio * wasteWidthRatio);
-            wasteText = `${wasteWidth} cm × ${length} cm`;
-            wastePriceText = wastePrice;
+            // 累積總廢料金額 = 單片廢料金額 * 數量
+            totalWastePrice = Math.round(basePrice * lengthRatio * wasteWidthRatio * qty);
+            // 廢料尺寸顯示標註數量
+            wasteText = `${wasteWidth} cm × ${length} cm (共 ${qty} 塊)`;
         }
 
+        // 渲染結果
         document.getElementById("resSize").innerText = `${width} cm × ${length} cm`;
-        document.getElementById("resPrice").innerText = finalPrice;
+        document.getElementById("resQty").innerText = qty;
+        document.getElementById("resPrice").innerText = totalPrice;
         document.getElementById("resWasteSize").innerText = wasteText;
-        document.getElementById("resWastePrice").innerText = wastePriceText;
+        document.getElementById("resWastePrice").innerText = totalWastePrice;
         resultBox.style.display = "block";
     }
 </script>
