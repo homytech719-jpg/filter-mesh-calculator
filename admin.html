@@ -48,6 +48,13 @@
 </div>
 
 <script>
+    // 🔒 密碼防護邏輯
+    const password = prompt("請輸入內部訪問密碼：");
+    if (password !== "719") {
+        alert("密碼錯誤，拒絕存取！");
+        document.body.innerHTML = "<h1 style='text-align:center;margin-top:100px;color:red;'>❌ 未授權訪問</h1>";
+    }
+
     function generateJson() {
         let currentData = [];
         const currentJsonInput = document.getElementById("currentJson").value.trim();
@@ -70,7 +77,6 @@
             return;
         }
 
-        // 檢查是否重複，重複則更新，不重複則新增
         const existingIndex = currentData.findIndex(item => item.code === code);
         if (existingIndex > -1) {
             currentData[existingIndex] = { code, name, price };
@@ -81,7 +87,6 @@
         const finalJsonString = JSON.stringify(currentData, null, 2);
         document.getElementById("outputJson").value = finalJsonString;
         
-        // 自動複製到剪貼簿
         document.getElementById("outputJson").select();
         document.execCommand("copy");
         alert("📋 全新 JSON 已生成並自動複製！請直接到 GitHub 的 data.json 全選貼上並 Commit。");
