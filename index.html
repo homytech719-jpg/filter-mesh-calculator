@@ -8,10 +8,21 @@
         body { font-family: Arial, sans-serif; background-color: #f4f6f9; padding: 20px; display: flex; justify-content: center; }
         .container { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; width: 100%; }
         h2 { text-align: center; color: #333; }
-        .form-group { margin-bottom: 15px; }
+        .form-group { margin-bottom: 15px; position: relative; }
         label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
         input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
         .hint { font-size: 13px; color: #888; margin-top: 2px; }
+        
+        /* 🔍 關鍵字下拉選單樣式 */
+        .search-results { 
+            position: absolute; width: 100%; max-height: 200px; overflow-y: auto; 
+            background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; 
+            z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: none; box-sizing: border-box;
+        }
+        .search-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 14px; }
+        .search-item:hover { background-color: #f0f7ff; color: #007bff; }
+        .search-item strong { color: #333; }
+
         .size-box { border: 2px dashed #007bff; padding: 15px; border-radius: 6px; background-color: #f0f7ff; margin: 20px 0; }
         .size-title { font-weight: bold; color: #007bff; margin-bottom: 10px; font-size: 16px; }
         .result-box { margin-top: 25px; padding: 20px; background-color: #fff9e6; border-left: 5px solid #ffcc00; border-radius: 4px; display: none; }
@@ -28,12 +39,14 @@
     
     <div class="form-group">
         <label for="codeInput">商品品項編碼：</label>
-        <input type="text" id="codeInput" placeholder="請手輸入或貼上品項編碼" oninput="searchProduct()">
+        <input type="text" id="codeInput" placeholder="輸入編碼（支援模糊搜尋）..." oninput="searchProduct('code')" autocomplete="off">
+        <div id="codeSearchResults" class="search-results"></div>
     </div>
 
     <div class="form-group">
         <label for="nameInput">品項名稱：</label>
-        <input type="text" id="nameInput" placeholder="自動帶出或可自行輸入">
+        <input type="text" id="nameInput" placeholder="輸入名稱（支援模糊搜尋）..." oninput="searchProduct('name')" autocomplete="off">
+        <div id="nameSearchResults" class="search-results"></div>
     </div>
 
     <div class="form-group">
@@ -82,17 +95,55 @@
         .then(data => { db = data; console.log("資料庫同步成功！"); })
         .catch(err => console.log("讀取資料庫失敗:", err));
 
-    // 關鍵字搜尋資料庫
-    function searchProduct() {
-        const code = document.getElementById("codeInput").value.trim();
-        const found = db.find(item => item.code === code);
+    // 🔍 雙向關鍵字模糊搜尋
+    function searchProduct(type) {
+        const keyword = document.getElementById(type === 'code' ? "codeInput" : "nameInput").value.trim().toLowerCase();
+        const resultsDiv = document.getElementById(type === 'code' ? "codeSearchResults" : "nameSearchResults");
+        const otherResultsDiv = document.getElementById(type === 'code' ? "nameSearchResults" : "codeSearchResults");
         
-        if (found) {
-            document.getElementById("nameInput").value = found.name;
-            document.getElementById("basePriceInput").value = found.price;
-            calculate();
+        // 先關閉另外一個輸入框的選單
+        otherResultsDiv.style.display = "none";
+
+        if (keyword === "") {
+            resultsDiv.style.display = "none";
+            return;
+        }
+
+        // 篩選編碼或品名包含關鍵字的商品
+        const matches = db.filter(item => 
+            item.code.toLowerCase().includes(keyword) || 
+            item.name.toLowerCase().includes(keyword)
+        );
+
+        if (matches.length > 0) {
+            resultsDiv.innerHTML = "";
+            matches.forEach(item => {
+                const div = document.createElement("div");
+                div.className = "search-item";
+                div.innerHTML = `<strong>${item.code}</strong><br><small style="color:#666;">${item.name}</small>`;
+                
+                div.onclick = function() {
+                    document.getElementById("codeInput").value = item.code;
+                    document.getElementById("nameInput").value = item.name;
+                    document.getElementById("basePriceInput").value = item.price;
+                    resultsDiv.style.display = "none";
+                    calculate();
+                };
+                resultsDiv.appendChild(div);
+            });
+            resultsDiv.style.display = "block";
+        } else {
+            resultsDiv.style.display = "none";
         }
     }
+
+    // 點擊網頁其他地方時，收起所有下拉選單
+    document.addEventListener("click", function(e) {
+        if (e.target.id !== "codeInput" && e.target.id !== "nameInput") {
+            document.getElementById("codeSearchResults").style.display = "none";
+            document.getElementById("nameSearchResults").style.display = "none";
+        }
+    });
 
     // 計算邏輯
     function calculate() {
