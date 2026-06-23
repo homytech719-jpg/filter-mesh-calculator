@@ -66,9 +66,14 @@
 </div>
 
 <script>
-    let db = [];
+    // 🔒 密碼防護邏輯
+    const password = prompt("請輸入內部訪問密碼：");
+    if (password !== "719") {
+        alert("密碼錯誤，拒絕存取！");
+        document.body.innerHTML = "<h1 style='text-align:center;margin-top:100px;color:red;'>❌ 未授權訪問</h1>";
+    }
 
-    // 自動抓取同目錄下的 data.json 檔案
+    let db = [];
     const jsonUrl = "data.json";
 
     // 讀取最新的 data.json 資料庫
@@ -103,24 +108,19 @@
 
         if (isNaN(width) || width <= 0) width = 100;
 
-        // 固定基準：寬 100cm, 長 30cm
         const baseWidth = 100;
         const baseLength = 30;
 
-        // 寬度限制警告
         if (width > baseWidth) {
             alert(`⚠️ 輸入寬度 (${width}cm) 不能大於原始整卷寬度 (${baseWidth}cm)！`);
             document.getElementById("widthInput").value = baseWidth;
             width = baseWidth;
         }
 
-        // 比例計算
         const lengthRatio = length / baseLength;
         const widthRatio = width / baseWidth;
-
         const finalPrice = Math.round(basePrice * lengthRatio * widthRatio);
 
-        // 廢料計算
         const wasteWidth = baseWidth - width;
         let wasteText = "無廢料 (寬度剛好用完)";
         let wastePriceText = "0";
@@ -132,7 +132,6 @@
             wastePriceText = wastePrice;
         }
 
-        // 渲染結果
         document.getElementById("resSize").innerText = `${width} cm × ${length} cm`;
         document.getElementById("resPrice").innerText = finalPrice;
         document.getElementById("resWasteSize").innerText = wasteText;
