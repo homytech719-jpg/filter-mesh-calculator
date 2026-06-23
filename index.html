@@ -75,6 +75,7 @@
         <hr style="border: 0; border-top: 1px solid #ffe899; margin-bottom: 10px;">
         <div class="result-item">📐 單片尺寸：<span id="resSize"></span></div>
         <div class="result-item">📦 需求數量：<span id="resQty" style="font-weight: bold;">1</span> 片</div>
+        <div class="result-item">💰 單片售價：<span id="resSinglePrice" style="font-weight: bold; color: #444;">0</span> 元</div>
         <div class="result-item">💰 總計售價：<span id="resPrice" class="highlight">0</span> 元</div>
         <hr style="border: 0; border-top: 1px dashed #ffe899; margin: 15px 0;">
         <div class="result-item">♻️ 累積廢料尺寸：<span id="resWasteSize"></span></div>
@@ -189,9 +190,10 @@
         const lengthRatio = length / baseLength;
         const widthRatio = width / baseWidth;
         
-        // 總售價 = 單片售價 * 數量
-        const singlePrice = basePrice * lengthRatio * widthRatio;
-        const totalPrice = Math.round(singlePrice * qty);
+        // 四捨五入單片售價，維持報價邏輯的一致性
+        const singlePriceRounded = Math.round(basePrice * lengthRatio * widthRatio);
+        // 總售價 = 四捨五入後的單片售價 * 數量
+        const totalPrice = singlePriceRounded * qty;
 
         // 廢料計算
         const wasteWidth = baseWidth - width;
@@ -200,15 +202,14 @@
 
         if (wasteWidth > 0) {
             const wasteWidthRatio = wasteWidth / baseWidth;
-            // 累積總廢料金額 = 單片廢料金額 * 數量
             totalWastePrice = Math.round(basePrice * lengthRatio * wasteWidthRatio * qty);
-            // 廢料尺寸顯示標註數量
             wasteText = `${wasteWidth} cm × ${length} cm (共 ${qty} 塊)`;
         }
 
         // 渲染結果
         document.getElementById("resSize").innerText = `${width} cm × ${length} cm`;
         document.getElementById("resQty").innerText = qty;
+        document.getElementById("resSinglePrice").innerText = singlePriceRounded; // 顯示單片售價
         document.getElementById("resPrice").innerText = totalPrice;
         document.getElementById("resWasteSize").innerText = wasteText;
         document.getElementById("resWastePrice").innerText = totalWastePrice;
