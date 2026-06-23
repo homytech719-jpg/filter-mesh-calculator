@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>濾網裁切價格模擬器</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f6f9; padding: 20px; display: flex; justify-content: center; }
+        .container { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; width: 100%; }
+        h2 { text-align: center; color: #333; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
+        .hint { font-size: 13px; color: #888; margin-top: 2px; }
+        .size-box { border: 2px dashed #007bff; padding: 15px; border-radius: 6px; background-color: #f0f7ff; margin: 20px 0; }
+        .size-title { font-weight: bold; color: #007bff; margin-bottom: 10px; font-size: 16px; }
+        .result-box { margin-top: 25px; padding: 20px; background-color: #fff9e6; border-left: 5px solid #ffcc00; border-radius: 4px; display: none; }
+        .result-title { font-size: 18px; font-weight: bold; color: #b27a00; margin-bottom: 10px; }
+        .result-item { margin-bottom: 8px; font-size: 16px; }
+        .highlight { font-weight: bold; color: #d9534f; font-size: 20px; }
+        .waste-highlight { color: #17a2b8; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📐 濾網裁切價格模擬器</h2>
+    
+    <div class="form-group">
+        <label for="codeInput">商品品項編碼：</label>
+        <input type="text" id="codeInput" placeholder="請手輸入或貼上品項編碼" oninput="searchProduct()">
+    </div>
+
+    <div class="form-group">
+        <label for="nameInput">品項名稱：</label>
+        <input type="text" id="nameInput" placeholder="自動帶出或可自行輸入">
+    </div>
+
+    <div class="form-group">
+        <label for="basePriceInput">商品原始 1米1尺 售價：</label>
+        <input type="number" id="basePriceInput" placeholder="自動帶出或可自行輸入" oninput="calculate()">
+        <div class="hint">※ 基準規格固定為 寬100cm × 長30cm</div>
+    </div>
+
+    <div class="size-box">
+        <div class="size-title">📋 單片尺寸</div>
+        <div class="form-group">
+            <label for="lengthInput">請輸入自訂【長度】(cm)：</label>
+            <input type="number" id="lengthInput" placeholder="請輸入長度" oninput="calculate()">
+        </div>
+        <div class="form-group">
+            <label for="widthInput">請輸入自訂【寬度】(cm)：</label>
+            <input type="number" id="widthInput" value="100" placeholder="預設 100" oninput="calculate()">
+        </div>
+    </div>
+
+    <div id="resultBox" class="result-box">
+        <div class="result-title">📊 試算結果</div>
+        <hr style="border: 0; border-top: 1px solid #ffe899; margin-bottom: 10px;">
+        <div class="result-item">📐 裁切尺寸：<span id="resSize"></span></div>
+        <div class="result-item">💰 試算售價：<span id="resPrice" class="highlight">0</span> 元</div>
+        <hr style="border: 0; border-top: 1px dashed #ffe899; margin: 15px 0;">
+        <div class="result-item">♻️ 產生廢料尺寸：<span id="resWasteSize"></span></div>
+        <div class="result-item">💵 廢料等值金額：<span id="resWastePrice" class="waste-highlight">0</span> 元</div>
+    </div>
+</div>
+
+<script>
+    let db = [];
+
+    // 自動抓取同目錄下的 data.json 檔案
+    const jsonUrl = "data.json";
+
+    // 讀取最新的 data.json 資料庫
+    fetch(jsonUrl)
+        .then(res => res.json())
+        .then(data => { db = data; console.log("資料庫同步成功！"); })
+        .catch(err => console.log("讀取資料庫失敗:", err));
+
+    // 關鍵字搜尋資料庫
+    function searchProduct() {
+        const code = document.getElementById("codeInput").value.trim();
+        const found = db.find(item => item.code === code);
+        
+        if (found) {
+            document.getElementById("nameInput").value = found.name;
+            document.getElementById("basePriceInput").value = found.price;
+            calculate();
+        }
+    }
+
+    // 計算邏輯
+    function calculate() {
+        const basePrice = parseFloat(document.getElementById("basePriceInput").value);
+        const length = parseFloat(document.getElementById("lengthInput").value);
+        let width = parseFloat(document.getElementById("widthInput").value);
+        const resultBox = document.getElementById("resultBox");
+
+        if (!basePrice || !length || length <= 0) {
+            resultBox.style.display = "none";
+            return;
+        }
+
+        if (isNaN(width) || width <= 0) width = 100;
+
+        // 固定基準：寬 100cm, 長 30cm
+        const baseWidth = 100;
+        const baseLength = 30;
+
+        // 寬度限制警告
+        if (width > baseWidth) {
+            alert(`⚠️ 輸入寬度 (${width}cm) 不能大於原始整卷寬度 (${baseWidth}cm)！`);
+            document.getElementById("widthInput").value = baseWidth;
+            width = baseWidth;
+        }
+
+        // 比例計算
+        const lengthRatio = length / baseLength;
+        const widthRatio = width / baseWidth;
+
+        const finalPrice = Math.round(basePrice * lengthRatio * widthRatio);
+
+        // 廢料計算
+        const wasteWidth = baseWidth - width;
+        let wasteText = "無廢料 (寬度剛好用完)";
+        let wastePriceText = "0";
+
+        if (wasteWidth > 0) {
+            const wasteWidthRatio = wasteWidth / baseWidth;
+            const wastePrice = Math.round(basePrice * lengthRatio * wasteWidthRatio);
+            wasteText = `${wasteWidth} cm × ${length} cm`;
+            wastePriceText = wastePrice;
+        }
+
+        // 渲染結果
+        document.getElementById("resSize").innerText = `${width} cm × ${length} cm`;
+        document.getElementById("resPrice").innerText = finalPrice;
+        document.getElementById("resWasteSize").innerText = wasteText;
+        document.getElementById("resWastePrice").innerText = wastePriceText;
+        resultBox.style.display = "block";
+    }
+</script>
+
+</body>
+</html>
