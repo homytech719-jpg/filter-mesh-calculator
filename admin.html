@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>濾網資料庫管理後台</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f6f9; padding: 20px; }
+        .container { background-color: white; padding: 30px; border-radius: 8px; max-width: 600px; margin: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #28a745; color: white; padding: 12px; border: none; border-radius: 4px; width: 100%; font-size: 16px; cursor: pointer; }
+        button:hover { background-color: #218838; }
+        textarea { width: 100%; height: 15px; margin-top: 15px; padding: 10px; box-sizing: border-box; background-color: #eee; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>➕ 新增濾網品項到資料庫</h2>
+    
+    <div class="form-group">
+        <label>1. 先貼上目前的 data.json 內容（若第一次建立請留空）：</label>
+        <textarea id="currentJson" style="height: 100px;" placeholder='例如：[{"code":"P105","name":"濾網","price":540}]'></textarea>
+    </div>
+    
+    <hr>
+    
+    <div class="form-group">
+        <label>2. 輸入新商品編碼：</label>
+        <input type="text" id="newCode" placeholder="例如：P105-S10-0.55-T04">
+    </div>
+    <div class="form-group">
+        <label>3. 輸入新商品名稱：</label>
+        <input type="text" id="newName" placeholder="例如：304濾網10目寬100cm線徑0.55mm">
+    </div>
+    <div class="form-group">
+        <label>4. 輸入 1米1尺 原始售價：</label>
+        <input type="number" id="newPrice" placeholder="例如：540">
+    </div>
+
+    <button onclick="generateJson()">生成並複製全新資料庫 JSON</button>
+    
+    <div class="form-group" style="margin-top: 20px;">
+        <label>5. 複製下方產生的內容，貼回 GitHub 的 data.json 中：</label>
+        <textarea id="outputJson" style="height: 150px;" readonly></textarea>
+    </div>
+</div>
+
+<script>
+    function generateJson() {
+        let currentData = [];
+        const currentJsonInput = document.getElementById("currentJson").value.trim();
+        
+        if (currentJsonInput !== "") {
+            try {
+                currentData = JSON.parse(currentJsonInput);
+            } catch(e) {
+                alert("❌ 目前的 JSON 格式有誤，請確認是否複製完整。");
+                return;
+            }
+        }
+
+        const code = document.getElementById("newCode").value.trim();
+        const name = document.getElementById("newName").value.trim();
+        const price = parseFloat(document.getElementById("newPrice").value);
+
+        if (!code || !name || !price) {
+            alert("❌ 請填寫完整的新商品資料！");
+            return;
+        }
+
+        // 檢查是否重複，重複則更新，不重複則新增
+        const existingIndex = currentData.findIndex(item => item.code === code);
+        if (existingIndex > -1) {
+            currentData[existingIndex] = { code, name, price };
+        } else {
+            currentData.push({ code, name, price });
+        }
+
+        const finalJsonString = JSON.stringify(currentData, null, 2);
+        document.getElementById("outputJson").value = finalJsonString;
+        
+        // 自動複製到剪貼簿
+        document.getElementById("outputJson").select();
+        document.execCommand("copy");
+        alert("📋 全新 JSON 已生成並自動複製！請直接到 GitHub 的 data.json 全選貼上並 Commit。");
+    }
+</script>
+
+</body>
+</html>
