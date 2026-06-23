@@ -13,7 +13,6 @@
         input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
         .hint { font-size: 13px; color: #888; margin-top: 2px; }
         
-        /* 🔍 關鍵字下拉選單樣式 */
         .search-results { 
             position: absolute; width: 100%; max-height: 200px; overflow-y: auto; 
             background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; 
@@ -52,7 +51,7 @@
     <div class="form-group">
         <label for="basePriceInput">商品原始 1米1尺 售價：</label>
         <input type="number" id="basePriceInput" placeholder="自動帶出或可自行輸入" oninput="calculate()">
-        <div class="hint">※ 基準規格固定為 寬100cm × 長30cm</div>
+        <div class="hint" id="baseSpecsHint">※ 基準規格：寬 100 cm × 長 30 cm</div>
     </div>
 
     <div class="size-box">
@@ -87,6 +86,7 @@
     }
 
     let db = [];
+    let currentProductBaseWidth = 100; // 預設整卷寬度基準為 100
     const jsonUrl = "data.json";
 
     // 讀取最新的 data.json 資料庫
@@ -95,13 +95,22 @@
         .then(data => { db = data; console.log("資料庫同步成功！"); })
         .catch(err => console.log("讀取資料庫失敗:", err));
 
+    // 自動從品名偵測寬度規格 (支援 120cm, 91cm 等)
+    function detectWidthFromProductName(name) {
+        let matchedWidth = 100; // 找不到預設就是 100
+        const match = name.match(/寬(\d+)cm/);
+        if (match && match[1]) {
+            matchedWidth = parseInt(match[1]);
+        }
+        return matchedWidth;
+    }
+
     // 🔍 雙向關鍵字模糊搜尋
     function searchProduct(type) {
         const keyword = document.getElementById(type === 'code' ? "codeInput" : "nameInput").value.trim().toLowerCase();
         const resultsDiv = document.getElementById(type === 'code' ? "codeSearchResults" : "nameSearchResults");
         const otherResultsDiv = document.getElementById(type === 'code' ? "nameSearchResults" : "codeSearchResults");
         
-        // 先關閉另外一個輸入框的選單
         otherResultsDiv.style.display = "none";
 
         if (keyword === "") {
@@ -109,7 +118,6 @@
             return;
         }
 
-        // 篩選編碼或品名包含關鍵字的商品
         const matches = db.filter(item => 
             item.code.toLowerCase().includes(keyword) || 
             item.name.toLowerCase().includes(keyword)
@@ -126,6 +134,14 @@
                     document.getElementById("codeInput").value = item.code;
                     document.getElementById("nameInput").value = item.name;
                     document.getElementById("basePriceInput").value = item.price;
+                    
+                    // ✨ 核心升級：自動偵測該品項的原始寬度
+                    currentProductBaseWidth = detectWidthFromProductName(item.name);
+                    
+                    // ✨ 同步修改預設寬度輸入框的值，並更新提示字
+                    document.getElementById("widthInput").value = currentProductBaseWidth;
+                    document.getElementById("baseSpecsHint").innerText = `※ 基準規格：寬 ${currentProductBaseWidth} cm × 長 30 cm`;
+                    
                     resultsDiv.style.display = "none";
                     calculate();
                 };
@@ -137,7 +153,6 @@
         }
     }
 
-    // 點擊網頁其他地方時，收起所有下拉選單
     document.addEventListener("click", function(e) {
         if (e.target.id !== "codeInput" && e.target.id !== "nameInput") {
             document.getElementById("codeSearchResults").style.display = "none";
@@ -157,21 +172,25 @@
             return;
         }
 
-        if (isNaN(width) || width <= 0) width = 100;
+        // 如果手動改掉售價或寬度，且當前沒有選定產品，則使用欄位當前值
+        if (isNaN(width) || width <= 0) width = currentProductBaseWidth;
 
-        const baseWidth = 100;
-        const baseLength = 30;
+        const baseWidth = currentProductBaseWidth; // 使用自動偵測到的基準寬度 (100, 120 或 91)
+        const baseLength = 30; // 固定 1 尺 = 30cm
 
+        // 寬度限制警告
         if (width > baseWidth) {
-            alert(`⚠️ 輸入寬度 (${width}cm) 不能大於原始整卷寬度 (${baseWidth}cm)！`);
+            alert(`⚠️ 輸入寬度 (${width}cm) 不能大於該產品原始整卷寬度 (${baseWidth}cm)！`);
             document.getElementById("widthInput").value = baseWidth;
             width = baseWidth;
         }
 
+        // 比例計算
         const lengthRatio = length / baseLength;
         const widthRatio = width / baseWidth;
         const finalPrice = Math.round(basePrice * lengthRatio * widthRatio);
 
+        // 廢料計算
         const wasteWidth = baseWidth - width;
         let wasteText = "無廢料 (寬度剛好用完)";
         let wastePriceText = "0";
