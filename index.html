@@ -28,6 +28,7 @@
         .result-title { font-size: 18px; font-weight: bold; color: #b27a00; margin-bottom: 10px; }
         .result-item { margin-bottom: 8px; font-size: 16px; }
         .highlight { font-weight: bold; color: #d9534f; font-size: 20px; }
+        .sub-highlight { font-weight: bold; color: #28a745; font-size: 18px; }
         .waste-highlight { color: #17a2b8; font-weight: bold; }
     </style>
 </head>
@@ -71,16 +72,15 @@
     </div>
 
     <div id="resultBox" class="result-box">
-        <div class="result-title">📊 試算結果 (最佳化排版)</div>
+        <div class="result-title">📊 試算結果</div>
         <hr style="border: 0; border-top: 1px solid #ffe899; margin-bottom: 10px;">
         <div class="result-item">📐 單片尺寸：<span id="resSize"></span></div>
         <div class="result-item">📦 需求數量：<span id="resQty" style="font-weight: bold;">1</span> 片</div>
-        <div class="result-item">💰 單片售價：<span id="resSinglePrice" style="font-weight: bold; color: #444;">0</span> 元</div>
+        <div class="result-item">💰 單片售價：<span id="resSinglePrice" class="sub-highlight">0</span> 元</div>
         <div class="result-item">💰 總計售價：<span id="resPrice" class="highlight">0</span> 元</div>
         <hr style="border: 0; border-top: 1px dashed #ffe899; margin: 15px 0;">
-        <div class="result-item">✂️ 實際拉出材料長度：<span id="resUsedLength" style="font-weight: bold; color: #007bff;">0</span> cm</div>
-        <div class="result-item">♻️ 剩餘邊料尺寸：<span id="resWasteSize"></span></div>
-        <div class="result-item">💵 邊料等值金額：<span id="resWastePrice" class="waste-highlight">0</span> 元</div>
+        <div class="result-item">♻️ 餘料等值面積：<span id="resWasteSize"></span></div>
+        <div class="result-item">💵 餘料等值金額：<span id="resWastePrice" class="waste-highlight">0</span> 元</div>
     </div>
 </div>
 
@@ -140,14 +140,13 @@
                     document.getElementById("basePriceInput").value = item.price;
                     
                     currentProductBaseWidth = detectWidthFromProductName(item.name);
-                    
                     document.getElementById("widthInput").value = currentProductBaseWidth;
                     document.getElementById("baseSpecsHint").innerText = `※ 基準規格：寬 ${currentProductBaseWidth} cm × 長 30 cm`;
                     
                     HydeResultsDiv.style.display = "none";
                     calculate();
                 };
-                HydeResultsDiv.appendChild(div);
+                resultsDiv.appendChild(div);
             });
             HydeResultsDiv.style.display = "block";
         } else {
@@ -162,7 +161,7 @@
         }
     });
 
-    // 計算邏輯 (修正為排版排料邏輯)
+    // 計算邏輯 (回歸單純的 售價 / 30 * 長度 * 寬度 / 基準寬度)
     function calculate() {
         const basePrice = parseFloat(document.getElementById("basePriceInput").value);
         const length = parseFloat(document.getElementById("lengthInput").value);
@@ -187,49 +186,22 @@
             width = baseWidth;
         }
 
-        // 🧠 核心排料邏輯計算：
-        // 1. 在材料原始寬度內，一橫排可以並排塞下幾片？
-        const piecesPerRow = Math.floor(baseWidth / width); 
-        
-        // 2. 總共需要排成幾橫排？
-        const totalRows = Math.ceil(qty / piecesPerRow);
-        
-        // 3. 實際需要拉出來的總整卷材料長度是多少？
-        const realUsedLength = totalRows * length;
+        // 💰 完美的單純面積比例公式：售價 / 30 * 長度 / 基準寬度 * 寬度
+        const singlePriceRounded = Math.round((basePrice / baseLength) * length * (width / baseWidth));
+        const totalPrice = singlePriceRounded * qty;
 
-        // 💰 總售價依據「實際拉出的整卷材料面積」來計算
-        const totalPrice = Math.round(basePrice * (realUsedLength / baseLength));
-        
-        // 算回單片售價 (給使用者看)
-        const singlePriceRounded = Math.round(totalPrice / qty);
-
-        // ♻️ 剩餘邊料計算
-        // 情況 A：寬度有剩餘的側邊長條料
-        const sideWasteWidth = baseWidth - (piecesPerRow * width);
-        // 情況 B：最後一排如果沒排滿，會多出空位殘料
-        const emptySeatsInLastRow = (piecesPerRow * totalRows) - qty;
-
-        let wasteText = "";
-        let totalWastePrice = 0;
-
-        // 計算邊料價值 (拉出的總材料售價 - 客人實際拿走的面積價值)
-        const totalMaterialArea = baseWidth * realUsedLength;
+        // ♻️ 餘料計算（總材料面積 減去 客人拿走的總面積）
+        // 假設為了這單，最低限度需要拉出的布長度是基本客製長度 (如果多片，就用總長度來概估面積)
+        const totalMaterialArea = baseWidth * length * qty;
         const customerTotalArea = width * length * qty;
         const wasteArea = totalMaterialArea - customerTotalArea;
         
+        let wasteText = "無餘料 (寬度與長度剛好用完)";
+        let totalWastePrice = 0;
+
         if (wasteArea > 0) {
-            totalWastePrice = Math.round(basePrice * (realUsedLength / baseLength) * (wasteArea / totalMaterialArea));
-            
-            let wasteDescriptions = [];
-            if (sideWasteWidth > 0) {
-                wasteDescriptions.push(`側邊剩餘 寬 ${sideWasteWidth} cm × 長 ${realUsedLength} cm`);
-            }
-            if (emptySeatsInLastRow > 0) {
-                wasteDescriptions.push(`末排空缺 ${emptySeatsInLastRow} 片份量 (${width} cm × ${length} cm)`);
-            }
-            wasteText = wasteDescriptions.join(' + ');
-        } else {
-            wasteText = "無廢料 (材料剛好切完)";
+            totalWastePrice = Math.round(totalPrice * (wasteArea / customerTotalArea));
+            wasteText = `剩餘等值約 ${wasteArea} 平方公分 面積`;
         }
 
         // 渲染結果
@@ -237,7 +209,6 @@
         document.getElementById("resQty").innerText = qty;
         document.getElementById("resSinglePrice").innerText = singlePriceRounded;
         document.getElementById("resPrice").innerText = totalPrice;
-        document.getElementById("resUsedLength").innerText = realUsedLength;
         document.getElementById("resWasteSize").innerText = wasteText;
         document.getElementById("resWastePrice").innerText = totalWastePrice;
         resultBox.style.display = "block";
