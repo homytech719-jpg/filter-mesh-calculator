@@ -67,7 +67,7 @@
         </div>
         <div class="form-group">
             <label for="quantityInput">請輸入需求【數量】(片)：</label>
-            <input type="number" id="quantityInput" value="1" min="1" placeholder="預設 1" oninput="calculate()">
+            <input type="number" id="quantityInput" value="1" min="1" step="1" placeholder="預設 1" oninput="calculate()">
         </div>
     </div>
 
@@ -97,7 +97,10 @@
     const jsonUrl = "data.json";
 
     fetch(jsonUrl)
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) throw new Error("HTTP 錯誤：" + res.status);
+            return res.json();
+        })
         .then(data => { db = data; console.log("資料庫同步成功！"); })
         .catch(err => console.log("讀取資料庫失敗:", err));
 
@@ -110,7 +113,6 @@
         return matchedWidth;
     }
 
-    // 🔍 雙向模糊搜尋功能
     function searchProduct(type) {
         const keyword = document.getElementById(type === 'code' ? "codeInput" : "nameInput").value.trim().toLowerCase();
         const resultsDiv = document.getElementById(type === 'code' ? "codeSearchResults" : "nameSearchResults");
@@ -135,7 +137,8 @@
                 div.className = "search-item";
                 div.innerHTML = `<strong>${item.code}</strong><br><small style="color:#666;">${item.name}</small>`;
                 
-                div.onclick = function() {
+                div.addEventListener("mousedown", function(e) {
+                    e.preventDefault();
                     document.getElementById("codeInput").value = item.code;
                     document.getElementById("nameInput").value = item.name;
                     document.getElementById("basePriceInput").value = item.price;
@@ -146,7 +149,7 @@
                     
                     resultsDiv.style.display = "none";
                     calculate();
-                };
+                });
                 resultsDiv.appendChild(div);
             });
             resultsDiv.style.display = "block";
@@ -162,7 +165,6 @@
         }
     });
 
-    // 📐 正確的排版計價與餘料換算邏輯
     function calculate() {
         const basePrice = parseFloat(document.getElementById("basePriceInput").value);
         const length = parseFloat(document.getElementById("lengthInput").value);
@@ -179,7 +181,7 @@
         if (isNaN(qty) || qty <= 0) qty = 1;
 
         const baseWidth = currentProductBaseWidth;
-        const baseLength = 30; // 1尺 = 30cm
+        const baseLength = 30;
 
         if (width > baseWidth) {
             alert(`⚠️ 輸入寬度 (${width}cm) 不能大於該產品原始整卷寬度 (${baseWidth}cm)！`);
@@ -187,43 +189,40 @@
             width = baseWidth;
         }
 
-        // 1. 【客人要的面積售價】基本公式 (四捨五入)
         const singlePriceRounded = Math.round((basePrice / baseLength) * length * (width / baseWidth));
         const totalPrice = singlePriceRounded * qty;
 
-        // 2. 【實務排版與餘料計算】
-        // 計算一排可以塞幾片
         const piecesPerRow = Math.floor(baseWidth / width); 
         
         let wasteText = "";
         let totalWastePrice = 0;
 
         if (piecesPerRow > 0) {
-            // 算出實際上總共排了幾排
             const totalRows = Math.ceil(qty / piecesPerRow);
-            // 實質拉出的布總長度
             const realUsedLength = totalRows * length;
-            // 實質拉出的總面積
             const totalMaterialArea = baseWidth * realUsedLength;
-            
-            // 客人真正帶走的總面積
             const customerTotalArea = width * length * qty;
-            
-            // 真正的餘料面積 = 拉出總面積 - 客人拿走總面積
             const realWasteArea = totalMaterialArea - customerTotalArea;
 
             if (realWasteArea > 0) {
-                // 餘料等值金額換算 = (大卷每平方公分單價) * 餘料面積
                 const pricePerSqCm = basePrice / (baseWidth * baseLength);
                 totalWastePrice = Math.round(pricePerSqCm * realWasteArea);
 
-                // 計算側邊剩餘寬度
-                const sideWasteWidth = baseWidth - (Math.min(qty, piecesPerRow) * width);
-                
-                if (sideWasteWidth > 0 && qty <= piecesPerRow) {
-                    wasteText = `寬 ${sideWasteWidth} cm × 長 ${length} cm`;
+                if (totalRows === 1) {
+                    const sideWasteWidth = baseWidth - (qty * width);
+                    if (sideWasteWidth > 0) {
+                        wasteText = `寬 ${sideWasteWidth} cm × 長 ${length} cm`;
+                    } else {
+                        wasteText = `剩餘約 ${realWasteArea} 平方公分 碎料`;
+                    }
                 } else {
-                    wasteText = `剩餘約 ${realWasteArea} 平方公分 碎料`;
+                    const piecesInLastRow = qty % piecesPerRow || piecesPerRow;
+                    const lastRowSideWaste = baseWidth - (piecesInLastRow * width);
+                    if (lastRowSideWaste > 0) {
+                        wasteText = `最後一排旁邊剩 寬 ${lastRowSideWaste} cm × 長 ${length} cm，共 ${totalRows} 排`;
+                    } else {
+                        wasteText = `剩餘約 ${realWasteArea} 平方公分 碎料`;
+                    }
                 }
             } else {
                 wasteText = "無餘料 (材料剛好切完)";
@@ -232,7 +231,6 @@
             wasteText = "尺寸過大無法排版";
         }
 
-        // 渲染結果
         document.getElementById("resSize").innerText = `${width} cm × ${length} cm`;
         document.getElementById("resQty").innerText = qty;
         document.getElementById("resSinglePrice").innerText = singlePriceRounded;
