@@ -110,15 +110,16 @@
         return matchedWidth;
     }
 
+    // 🔍 雙向關鍵字模糊搜尋
     function searchProduct(type) {
         const keyword = document.getElementById(type === 'code' ? "codeInput" : "nameInput").value.trim().toLowerCase();
-        const HydeResultsDiv = document.getElementById(type === 'code' ? "codeSearchResults" : "nameSearchResults");
+        const resultsDiv = document.getElementById(type === 'code' ? "codeSearchResults" : "nameSearchResults");
         const otherResultsDiv = document.getElementById(type === 'code' ? "nameSearchResults" : "codeSearchResults");
         
         otherResultsDiv.style.display = "none";
 
         if (keyword === "") {
-            HydeResultsDiv.style.display = "none";
+            resultsDiv.style.display = "none";
             return;
         }
 
@@ -128,7 +129,7 @@
         );
 
         if (matches.length > 0) {
-            HydeResultsDiv.innerHTML = "";
+            resultsDiv.innerHTML = "";
             matches.forEach(item => {
                 const div = document.createElement("div");
                 div.className = "search-item";
@@ -143,14 +144,14 @@
                     document.getElementById("widthInput").value = currentProductBaseWidth;
                     document.getElementById("baseSpecsHint").innerText = `※ 基準規格：寬 ${currentProductBaseWidth} cm × 長 30 cm`;
                     
-                    HydeResultsDiv.style.display = "none";
+                    resultsDiv.style.display = "none";
                     calculate();
                 };
                 resultsDiv.appendChild(div);
             });
-            HydeResultsDiv.style.display = "block";
+            resultsDiv.style.display = "block";
         } else {
-            HydeResultsDiv.style.display = "none";
+            resultsDiv.style.display = "none";
         }
     }
 
@@ -161,7 +162,7 @@
         }
     });
 
-    // 計算邏輯 (回歸單純的 售價 / 30 * 長度 * 寬度 / 基準寬度)
+    // 計算邏輯
     function calculate() {
         const basePrice = parseFloat(document.getElementById("basePriceInput").value);
         const length = parseFloat(document.getElementById("lengthInput").value);
@@ -178,7 +179,7 @@
         if (isNaN(qty) || qty <= 0) qty = 1;
 
         const baseWidth = currentProductBaseWidth;
-        const baseLength = 30; // 1尺 = 30cm
+        const baseLength = 30;
 
         if (width > baseWidth) {
             alert(`⚠️ 輸入寬度 (${width}cm) 不能大於該產品原始整卷寬度 (${baseWidth}cm)！`);
@@ -186,12 +187,11 @@
             width = baseWidth;
         }
 
-        // 💰 完美的單純面積比例公式：售價 / 30 * 長度 / 基準寬度 * 寬度
+        // 💰 面積比例公式
         const singlePriceRounded = Math.round((basePrice / baseLength) * length * (width / baseWidth));
         const totalPrice = singlePriceRounded * qty;
 
-        // ♻️ 餘料計算（總材料面積 減去 客人拿走的總面積）
-        // 假設為了這單，最低限度需要拉出的布長度是基本客製長度 (如果多片，就用總長度來概估面積)
+        // ♻️ 餘料計算
         const totalMaterialArea = baseWidth * length * qty;
         const customerTotalArea = width * length * qty;
         const wasteArea = totalMaterialArea - customerTotalArea;
@@ -204,7 +204,6 @@
             wasteText = `剩餘等值約 ${wasteArea} 平方公分 面積`;
         }
 
-        // 渲染結果
         document.getElementById("resSize").innerText = `${width} cm × ${length} cm`;
         document.getElementById("resQty").innerText = qty;
         document.getElementById("resSinglePrice").innerText = singlePriceRounded;
