@@ -8,8 +8,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Chart.js DataLabels -->
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-  <!-- PapaParse -->
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
     body { background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
@@ -90,7 +88,7 @@
     <button class="btn-export" id="btnExport">📷 輸出圖表為圖片 (PNG)</button>
 
     <details class="data-table-section" open>
-      <summary>點此收合/展開【資料明細】（若圖表未更新，請在此確認讀取到的原始資料）</summary>
+      <summary>點此收合/展開【資料明細】</summary>
       <div class="table-container">
         <table id="dataTable">
           <thead>
@@ -135,9 +133,9 @@
     if (e.key === 'Enter') checkPassword();
   });
 
-  // Google Sheet ID
-  const SPREADSHEET_ID = "1EjVT55EpO_J4T_UqkANFQykCh6nlE35GBPOwD6GYsZc";
-  
+  // 已填入你的專屬 Google Apps Script 部署網址
+  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzKlWIby048Ru688f50FEz7DG9Pvx_WkmXTKaEoe3SxDE_tmQAUeSNgQuVEzkD4inlxNQ/exec";
+
   let chartRecords = [];
   Chart.register(ChartDataLabels);
 
@@ -158,52 +156,45 @@
     return '';
   }
 
-  function loadGoogleSheetData() {
-    syncStatus.textContent = '⏳ 正在向 Google 試算表強制同步...';
+  async function loadGoogleSheetData() {
+    syncStatus.textContent = '⏳ 正在讀取專屬試算表 API...';
     syncStatus.style.color = '#0284c7';
 
-    // 加入時間戳記避免快取
-    const noCacheUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&t=${Date.now()}`;
+    try {
+      const res = await fetch(`${APPS_SCRIPT_URL}?t=${Date.now()}`);
+      const rows = await res.json();
 
-    Papa.parse(noCacheUrl, {
-      download: true,
-      header: true,
-      skipEmptyLines: 'greedy',
-      complete: function(results) {
-        const rows = results.data;
-        if (rows && rows.length > 0) {
-          chartRecords = rows.map(r => {
-            const dateStr = getFieldValue(r, ['日期', 'date', 'Date']);
-            const fubaoStr = getFieldValue(r, ['富堡', 'fubao', 'FuBao', '富堡金額']);
-            const hongmingStr = getFieldValue(r, ['泓明', 'hongming', 'HongMing', '泓明金額']);
-            const shapeStr = getFieldValue(r, ['標記', 'shape', '特殊註記', '註記']) || 'none';
-            const colorStr = getFieldValue(r, ['顏色', 'color', '註記顏色']) || '#b8860b';
+      if (rows && rows.length > 0) {
+        chartRecords = rows.map(r => {
+          const dateStr = getFieldValue(r, ['日期', 'date']);
+          const fubaoStr = getFieldValue(r, ['富堡', 'fubao']);
+          const hongmingStr = getFieldValue(r, ['泓明', 'hongming']);
+          const shapeStr = getFieldValue(r, ['標記', 'shape']) || 'none';
+          const colorStr = getFieldValue(r, ['顏色', 'color']) || '#b8860b';
 
-            return {
-              date: dateStr,
-              fubao: cleanNumber(fubaoStr),
-              hongming: cleanNumber(hongmingStr),
-              shape: shapeStr.toLowerCase(),
-              color: colorStr
-            };
-          }).filter(item => item.date && item.date !== '');
+          return {
+            date: dateStr,
+            fubao: cleanNumber(fubaoStr),
+            hongming: cleanNumber(hongmingStr),
+            shape: shapeStr.toLowerCase(),
+            color: colorStr
+          };
+        }).filter(item => item.date && item.date !== '');
 
-          chartRecords.sort((a, b) => new Date(a.date) - new Date(b.date));
-          
-          initOrUpdateChart();
-          renderTable();
-          syncStatus.textContent = `● 已成功同步最新資料 (${new Date().toLocaleTimeString()})`;
-          syncStatus.style.color = '#059669';
-        } else {
-          syncStatus.textContent = '▲ 試算表中未發現資料行';
-          syncStatus.style.color = '#eab308';
-        }
-      },
-      error: function(err) {
-        syncStatus.textContent = '▲ 同步失敗，請確認試算表已開啟「知道連結的人可檢視」權限';
-        syncStatus.style.color = '#ef4444';
+        chartRecords.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        initOrUpdateChart();
+        renderTable();
+        syncStatus.textContent = `● 已成功同步最新私密資料 (${new Date().toLocaleTimeString()})`;
+        syncStatus.style.color = '#059669';
+      } else {
+        syncStatus.textContent = '▲ 試算表內無資料';
+        syncStatus.style.color = '#eab308';
       }
-    });
+    } catch (err) {
+      syncStatus.textContent = '▲ 連線失敗，請確認 Apps Script 部署設定正確';
+      syncStatus.style.color = '#ef4444';
+    }
   }
 
   const markerPlugin = {
