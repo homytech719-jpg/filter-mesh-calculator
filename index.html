@@ -44,7 +44,7 @@
     .header h1 { margin: 0 0 10px 0; font-size: 26px; color: #444; }
     
     .status-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .sync-btn { background: #0284c7; color: #fff; border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .sync-btn { background: #0284c7; color: #fff; border: none; border-radius: 6px; padding: 7px 16px; cursor: pointer; font-size: 13px; font-weight: 600; }
     .sync-btn:hover { background: #0369a1; }
     .save-status { font-size: 13px; color: #059669; font-weight: 600; }
     
@@ -79,7 +79,7 @@
     </div>
 
     <div class="status-bar">
-      <button class="sync-btn" id="btnSync">🔄 重新讀取 Google 試算表</button>
+      <button class="sync-btn" id="btnSync">🔄 強制同步最新試算表資料</button>
       <div id="syncStatus" class="save-status">連線中...</div>
     </div>
 
@@ -89,8 +89,8 @@
 
     <button class="btn-export" id="btnExport">📷 輸出圖表為圖片 (PNG)</button>
 
-    <details class="data-table-section">
-      <summary>點此查看目前從 Google 試算表載入的資料明細</summary>
+    <details class="data-table-section" open>
+      <summary>點此收合/展開【資料明細】（若圖表未更新，請在此確認讀取到的原始資料）</summary>
       <div class="table-container">
         <table id="dataTable">
           <thead>
@@ -135,50 +135,72 @@
     if (e.key === 'Enter') checkPassword();
   });
 
-  // 已綁定你的 Google 試算表 CSV 連結
-  const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1EjVT55EpO_J4T_UqkANFQykCh6nlE35GBPOwD6GYsZc/gviz/tq?tqx=out:csv";
-
+  // Google Sheet ID
+  const SPREADSHEET_ID = "1EjVT55EpO_J4T_UqkANFQykCh6nlE35GBPOwD6GYsZc";
+  
   let chartRecords = [];
   Chart.register(ChartDataLabels);
 
   function cleanNumber(val) {
-    if (!val) return 0;
-    const num = String(val).replace(/,/g, '').replace(/NT\$/g, '').trim();
+    if (val === undefined || val === null || val === '') return 0;
+    const num = String(val).replace(/,/g, '').replace(/NT\$/g, '').replace(/\$/g, '').trim();
     return parseInt(num, 10) || 0;
   }
 
+  function getFieldValue(row, possibleKeys) {
+    const keys = Object.keys(row);
+    for (const pKey of possibleKeys) {
+      const match = keys.find(k => k.trim().toLowerCase() === pKey.toLowerCase());
+      if (match && row[match] !== undefined) {
+        return String(row[match]).trim();
+      }
+    }
+    return '';
+  }
+
   function loadGoogleSheetData() {
-    syncStatus.textContent = '⏳ 正在讀取試算表資料...';
+    syncStatus.textContent = '⏳ 正在向 Google 試算表強制同步...';
     syncStatus.style.color = '#0284c7';
 
-    Papa.parse(GOOGLE_SHEET_CSV_URL, {
+    // 加入時間戳記避免快取
+    const noCacheUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&t=${Date.now()}`;
+
+    Papa.parse(noCacheUrl, {
       download: true,
       header: true,
-      skipEmptyLines: true,
+      skipEmptyLines: 'greedy',
       complete: function(results) {
         const rows = results.data;
         if (rows && rows.length > 0) {
-          chartRecords = rows.map(r => ({
-            date: r['日期'] || r['date'] || '',
-            fubao: cleanNumber(r['富堡'] || r['fubao']),
-            hongming: cleanNumber(r['泓明'] || r['hongming']),
-            shape: (r['標記'] || r['shape'] || 'none').trim(),
-            color: (r['顏色'] || r['color'] || '#b8860b').trim()
-          })).filter(item => item.date);
+          chartRecords = rows.map(r => {
+            const dateStr = getFieldValue(r, ['日期', 'date', 'Date']);
+            const fubaoStr = getFieldValue(r, ['富堡', 'fubao', 'FuBao', '富堡金額']);
+            const hongmingStr = getFieldValue(r, ['泓明', 'hongming', 'HongMing', '泓明金額']);
+            const shapeStr = getFieldValue(r, ['標記', 'shape', '特殊註記', '註記']) || 'none';
+            const colorStr = getFieldValue(r, ['顏色', 'color', '註記顏色']) || '#b8860b';
+
+            return {
+              date: dateStr,
+              fubao: cleanNumber(fubaoStr),
+              hongming: cleanNumber(hongmingStr),
+              shape: shapeStr.toLowerCase(),
+              color: colorStr
+            };
+          }).filter(item => item.date && item.date !== '');
 
           chartRecords.sort((a, b) => new Date(a.date) - new Date(b.date));
           
           initOrUpdateChart();
           renderTable();
-          syncStatus.textContent = `● 試算表連線成功 (${new Date().toLocaleTimeString()})`;
+          syncStatus.textContent = `● 已成功同步最新資料 (${new Date().toLocaleTimeString()})`;
           syncStatus.style.color = '#059669';
         } else {
-          syncStatus.textContent = '▲ 試算表無資料';
+          syncStatus.textContent = '▲ 試算表中未發現資料行';
           syncStatus.style.color = '#eab308';
         }
       },
       error: function(err) {
-        syncStatus.textContent = '▲ 無法讀取試算表，請確認權限已設為公開檢視';
+        syncStatus.textContent = '▲ 同步失敗，請確認試算表已開啟「知道連結的人可檢視」權限';
         syncStatus.style.color = '#ef4444';
       }
     });
@@ -201,13 +223,13 @@
         ctx.save();
         ctx.fillStyle = item.color || '#b8860b';
         
-        if (item.shape === 'star') {
+        if (item.shape === 'star' || item.shape === '星星') {
           drawStar(ctx, x, y, 5, 18, 9);
-        } else if (item.shape === 'circle') {
+        } else if (item.shape === 'circle' || item.shape === '圓形') {
           ctx.beginPath();
           ctx.arc(x, y, 16, 0, Math.PI * 2);
           ctx.fill();
-        } else if (item.shape === 'triangle') {
+        } else if (item.shape === 'triangle' || item.shape === '三角形') {
           ctx.beginPath();
           ctx.moveTo(x, y - 16);
           ctx.lineTo(x + 16, y + 14);
